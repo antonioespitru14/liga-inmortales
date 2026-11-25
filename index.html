@@ -91,6 +91,12 @@ main { display: grid; gap: 20px; margin-top: 20px; }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .row.between { justify-content: space-between; }
 .scroll { overflow-x: auto; }
+.desglose { display: grid; margin-top: 6px; }
+.dj { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 4px 8px 0; border-bottom: 1px solid var(--line); }
+.dj .nm { font-weight: 600; }
+.dj .pchip { min-width: 3.4em; text-align: center; }
+.dj .sub { font-size: .8rem; overflow-wrap: anywhere; }
+.dj .pt { font-family: var(--display); font-weight: 800; font-size: 1.4rem; min-width: 2ch; text-align: right; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
@@ -288,9 +294,13 @@ function cumple(v, cond) {
   return op === '==' ? v === x : op === '>=' ? v >= x : op === '<=' ? v <= x : op === '>' ? v > x : op === '<' ? v < x : false;
 }
 // Puntos de un jugador en una jornada. Las reglas sin puntos («¿?») aún no cuentan.
-function puntosJugador(jid, st, capitan = false) {
-  if (!st || !st.min) return 0;
-  const p = jug(jid).p; let t = 0;
+const ETIQUETAS = { gol_del: 'Gol', gol_med: 'Gol', gol_def: 'Gol', gol_pen: 'Gol de penalti', pen_fallado: 'Penalti fallado', roja: 'Expulsión', asist: 'Asistencia', imb_def: 'Imbatibilidad', imb_por: 'Imbatibilidad', por_1gol: '1 gol recibido', por_2mas: 'Goles recibidos', victoria: 'Victoria', empate: 'Empate', picas: 'Picas' };
+function puntosJugador(jid, st, capitan = false) { return r1(desgloseJugador(jid, st, capitan).reduce((t, x) => t + x.pts, 0)); }
+// Desglose de los puntos de un jugador: [{ txt, pts }], una entrada por regla que puntúa.
+function desgloseJugador(jid, st, capitan = false) {
+  const out = [];
+  if (!st || !st.min) return out;
+  const p = jug(jid).p;
   for (const r of reglas()) {
     if (r.puntos == null || r.puntos === '') continue;
     if (r.pos?.length && !r.pos.includes(p)) continue;
@@ -300,9 +310,11 @@ function puntosJugador(jid, st, capitan = false) {
     if (!cumple(v, r.cond)) continue;
     let pts = r.modo === 'cada' ? Number(r.puntos) * Number(v) : Number(r.puntos);
     if (r.capitanX2 && capitan) pts *= 2;
-    t += pts;
+    if (!pts) continue;
+    const et = ETIQUETAS[r.id] || (r.texto.length > 28 ? r.texto.slice(0, 26) + '…' : r.texto);
+    out.push({ txt: et + (r.modo === 'cada' && Number(v) > 1 ? ' ×' + v : '') + (r.capitanX2 && capitan ? ' (capitán x2)' : ''), pts });
   }
-  return r1(t);
+  return out;
 }
 // Supuesto: si un titular no juega, entra el primer suplente de su misma posición que sí jugó.
 function puntuarEquipo(eid, jor) {
@@ -420,8 +432,13 @@ function vEquipos() {
       h('div', { style: 'display:grid;gap:14px;align-content:start' },
         h('div', {}, h('div', { class: 'sub' }, 'Puntos en la jornada ' + UI.jornadaEq), h('div', { class: 'total', style: 'font-size:3rem;line-height:1' }, res ? totalJornada(eid, jor) : '–'), res && !res.soloTotal && extrasJornada(jor)[eid] ? h('div', { class: 'sub' }, `${res.total} de sus jugadores + ${extrasJornada(jor)[eid]} extra por quedar entre los 3 primeros`) : ''),
         h('div', { class: 'sub' }, `Formación ${al.formacion}.` + (al.auto ? ' Alineación automática: su dueño aún no la ha elegido.' : '') + (esAbierta && eid !== mio ? ' Solo su dueño puede cambiarla.' : '') + (!esAbierta ? ' Jornada cerrada: ya no se puede cambiar.' : '')),
-        res && !res.soloTotal ? h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Jugador'), h('th', {}, 'Pos'), h('th', { class: 'num' }, 'Min'), h('th', { class: 'num' }, 'G'), h('th', { class: 'num' }, 'A'), h('th', { class: 'num' }, 'Pts'))),
-          h('tbody', {}, res.filas.map(f => h('tr', {}, h('td', {}, jug(f.jid).n), h('td', {}, jug(f.jid).p), h('td', { class: 'num' }, f.st?.min ?? 0), h('td', { class: 'num' }, f.st?.g ?? 0), h('td', { class: 'num' }, f.st?.a ?? 0), h('td', { class: 'num' }, h('b', {}, f.pts))))))) : '')));
+        res && !res.soloTotal ? h('div', {}, h('h3', {}, 'Puntos de cada jugador'), h('div', { class: 'desglose' }, res.filas.map(f => {
+          const fz = forzado(jor, f.jid), d = fz != null ? [] : desgloseJugador(f.jid, f.st, f.cap);
+          const det = fz != null ? 'Puntos corregidos a mano por un moderador' : !f.st?.min ? 'No jugó' : [`${f.st.min}'`, ...d.map(x => `${x.txt} ${x.pts > 0 ? '+' : ''}${x.pts}`)].join(' · ');
+          return h('div', { class: 'dj' }, h('span', { class: 'pchip' }, jug(f.jid).p),
+            h('div', { style: 'min-width:0' }, h('div', { class: 'nm' }, jug(f.jid).n + (f.cap ? ' (C)' : '')), h('div', { class: 'sub' }, (f.entraPor ? 'Entra por ' + jug(f.entraPor).n + ' · ' : '') + det)),
+            h('div', { class: 'pt' }, f.pts));
+        }))) : '')));
   }
   if (S.admin) bloques.push(panelAdminEquipo(eid, mbs));
   return [h('section', { class: 'panel' }, bloques)];
