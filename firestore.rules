@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function dentro() { return request.auth != null; }
+    function hayProp() { return exists(/databases/$(database)/documents/liga/propietario); }
+    function prop() { return get(/databases/$(database)/documents/liga/propietario).data; }
+    function admin() { return dentro() && hayProp() && (prop().uid == request.auth.uid || request.auth.uid in prop().get('admins', [])); }
+    function moderador() {
+      return admin() || (dentro() && exists(/databases/$(database)/documents/liga/ajustes)
+        && request.auth.uid in get(/databases/$(database)/documents/liga/ajustes).data.get('moderadores', []));
+    }
+
+    // Propietario de la liga: lo reclama la primera cuenta que pulsa «Ser el administrador».
+    match /liga/propietario {
+      allow read: if true;
+      allow create: if dentro() && request.resource.data.uid == request.auth.uid;
+      allow update: if dentro() && resource.data.uid == request.auth.uid && request.resource.data.uid == resource.data.uid;
+    }
+    match /liga/ajustes { allow read: if true; allow write: if admin(); }
+    match /movimientos/{id} { allow read: if true; allow write: if admin(); }
+    match /alineaciones/{uid} { allow read: if true; allow write: if dentro() && (request.auth.uid == uid || admin()); }
+    match /correcciones/{id} { allow read: if true; allow write: if moderador(); }
+    match /usuarios/{uid} { allow read: if true; allow write: if dentro() && request.auth.uid == uid; }
+  }
+}
