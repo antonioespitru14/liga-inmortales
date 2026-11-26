@@ -26,7 +26,9 @@
     reclamarPropietario: () => fs.doc('liga/propietario').set({ uid: W.usuario.uid, admins: [], creado: new Date().toISOString() }).then(() => location.reload()),
     guardarAdmins: admins => fs.doc('liga/propietario').update({ admins }).then(() => { W.propietario = { ...W.propietario, admins }; }),
   };
-  const primerEstado = new Promise(r => { const off = auth.onAuthStateChanged(u => { off(); r(u); }); });
+  // Guardar la sesión de forma permanente en este dispositivo (hasta pulsar «Salir»).
+  const persist = (auth.setPersistence && firebase.auth.Auth) ? auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e => console.warn(e)) : Promise.resolve();
+  const primerEstado = persist.then(() => new Promise(r => { const off = auth.onAuthStateChanged(u => { off(); r(u); }); }));
   const listo = (async () => {
     const u = await primerEstado; W.usuario = u;
     try { const p = await fs.doc('liga/propietario').get(); W.propietario = p.exists ? p.data() : null; } catch (e) { console.warn(e); }
