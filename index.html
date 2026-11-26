@@ -92,6 +92,10 @@ main { display: grid; gap: 20px; margin-top: 20px; }
 .row.between { justify-content: space-between; }
 .scroll { overflow-x: auto; }
 .desglose { display: grid; margin-top: 6px; }
+.resbusca { display: grid; max-width: 420px; }
+.resbusca .rb { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.resbusca .rb.sel { background: var(--accent-soft); }
+.resbusca .sub { font-size: .78rem; }
 .dj { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 4px 8px 0; border-bottom: 1px solid var(--line); }
 .dj .nm { font-weight: 600; }
 .dj .pchip { min-width: 3.4em; text-align: center; }
@@ -273,6 +277,12 @@ function alineacionEn(eid, jornada) {
     const clave = [Number(k), e.guardado || ''];
     if (!mejor || clave[0] > mejor[0] || (clave[0] === mejor[0] && clave[1] > mejor[1])) { mejor = clave; al = e; }
   }
+  // Alineaciones cambiadas por el administrador o un moderador (correcciones/alineaciones).
+  for (const [k, e] of Object.entries(S.correcciones?.alineaciones?.equipos?.[eid] || {})) {
+    if (Number(k) > jornada) continue;
+    const clave = [Number(k), e.guardado || ''];
+    if (!mejor || clave[0] > mejor[0] || (clave[0] === mejor[0] && clave[1] > mejor[1])) { mejor = clave; al = e; }
+  }
   if (!al && D.alineaciones?.[eid]) al = D.alineaciones[eid];
   if (!al) return alineacionAuto(pl);
   // Fichaje «x por y»: el fichado ocupa el sitio del que se suelta; luego se quita a quien ya no está en la plantilla.
@@ -282,7 +292,7 @@ function alineacionEn(eid, jornada) {
     tit = tit.map(x => x === m.sale ? m.entra : x); sup = sup.map(x => x === m.sale ? m.entra : x);
   }
   tit = tit.filter(x => pl.includes(x)); sup = sup.filter(x => pl.includes(x));
-  return { formacion: formacionDe(tit), titulares: tit, suplentes: sup, capitan: tit.includes(al.capitan) ? al.capitan : (al.capitan && tit.includes(movidoA(eid, al.capitan, jornada)) ? movidoA(eid, al.capitan, jornada) : null), huecos: 11 - tit.length, fuente: al.fuente };
+  return { formacion: formacionDe(tit), titulares: tit, suplentes: sup, capitan: tit.includes(al.capitan) ? al.capitan : (al.capitan && tit.includes(movidoA(eid, al.capitan, jornada)) ? movidoA(eid, al.capitan, jornada) : null), huecos: 11 - tit.length, fuente: al.fuente, autor: al.fuente === 'moderador' ? al.autor : null };
 }
 
 function movidoA(eid, jid, jornada) { const m = movimientos().find(m => m.equipo === eid && m.sale === jid && m.desdeJornada <= jornada); return m ? m.entra : jid; }
@@ -418,9 +428,11 @@ function vEquipos() {
     bloques.push(h('div', { class: 'banner', style: 'margin-top:12px' }, h('div', {}, h('b', {}, '¿Este es tu equipo? '), (mbs.length ? 'Ya lo gestiona ' + mbs.map(m => nombreDe(m._id)).join(' y ') + '. Si lo lleváis entre varios, únete y los dos podréis cambiar la alineación.' : 'Si lo es, pulsa el botón y podrás cambiar su alineación.') + ' Cada cuenta solo puede estar en un equipo.'),
       h('button', { onclick: () => reclamar(eid) }, 'Soy ' + p.nombre)));
   }
-  const puedoEditar = esAbierta && S.db && (eid === mio);
+  const propio = esAbierta && S.db && S.yo && eid === mio;
+  const comoMod = !propio && S.db && esModerador() && UI.editMod === eid + '|' + UI.jornadaEq;
+  const puedoEditar = propio || comoMod;
   if (!plantillaEn(eid, UI.jornadaEq).length) bloques.push(h('div', { class: 'empty' }, 'Plantilla pendiente. En cuanto el administrador pase los jugadores de ' + p.nombre + ', aparecerán aquí.'));
-  else if (puedoEditar) bloques.push(editorAlineacion(eid, ab));
+  else if (puedoEditar) bloques.push(editorAlineacion(eid, propio ? ab : UI.jornadaEq, comoMod));
   else {
     const jor = D.jornadas.find(j => j.num === UI.jornadaEq);
     const res = jor ? puntuarEquipo(eid, jor) : null;
@@ -435,7 +447,7 @@ function vEquipos() {
         pl.length > 11 + al.suplentes.length ? h('p', { class: 'sub' }, 'Fuera de la convocatoria: ' + pl.filter(x => !al.titulares.includes(x) && !al.suplentes.includes(x)).map(x => jug(x).n).join(', ')) : ''),
       h('div', { style: 'display:grid;gap:14px;align-content:start' },
         h('div', {}, h('div', { class: 'sub' }, 'Puntos en la jornada ' + UI.jornadaEq), h('div', { class: 'total', style: 'font-size:3rem;line-height:1' }, res ? totalJornada(eid, jor) : '–'), res && res.calculado != null ? h('div', { class: 'sub' }, `${res.total} del archivo de la liga` + (extrasJornada(jor)[eid] ? ` + ${extrasJornada(jor)[eid]} extra por quedar entre los 3 primeros` : '') + `. Con los datos de FutbolFantasy y las reglas actuales, sus jugadores suman ${res.calculado}.`) : res && !res.soloTotal && extrasJornada(jor)[eid] ? h('div', { class: 'sub' }, `${res.total} de sus jugadores + ${extrasJornada(jor)[eid]} extra por quedar entre los 3 primeros`) : ''),
-        h('div', { class: 'sub' }, `Formación ${al.formacion}.` + (al.auto ? ' Alineación automática: su dueño aún no la ha elegido.' : '') + (esAbierta && eid !== mio ? ' Solo su dueño puede cambiarla.' : '') + (!esAbierta ? ' Jornada cerrada: ya no se puede cambiar.' : '')),
+        h('div', { class: 'sub' }, `Formación ${al.formacion}.` + (al.autor ? ` Alineación puesta por ${nombreDe(al.autor)} (moderación).` : '') + (al.auto ? ' Alineación automática: su dueño aún no la ha elegido.' : '') + (esAbierta && eid !== mio ? ' Solo su dueño puede cambiarla.' : '') + (!esAbierta && !esModerador() ? ' Jornada cerrada: ya no se puede cambiar.' : '')),
         res && !res.soloTotal ? h('div', {}, h('h3', {}, 'Puntos de cada jugador'), h('div', { class: 'desglose' }, res.filas.map(f => {
           const fz = forzado(jor, f.jid), d = fz != null ? [] : desgloseJugador(f.jid, f.st, f.cap);
           const det = fz != null ? 'Puntos corregidos a mano por un moderador' : !f.st?.min ? 'No jugó' : [`${f.st.min}'`, ...d.map(x => `${x.txt} ${x.pts > 0 ? '+' : ''}${x.pts}`)].join(' · ');
@@ -444,13 +456,16 @@ function vEquipos() {
             h('div', { class: 'pt' }, f.pts));
         }))) : '')));
   }
+  if (!puedoEditar && S.db && esModerador() && plantillaEn(eid, UI.jornadaEq).length) bloques.push(h('div', { class: 'panel admin', style: 'margin-top:16px' }, h('h3', {}, 'Cambiar esta alineación'),
+    h('p', { class: 'sub', style: 'margin:4px 0 8px' }, `Como ${S.admin ? 'administrador' : 'moderador'} puedes cambiar la alineación de ${p.nombre} en la jornada ${UI.jornadaEq}${UI.jornadaEq < ab ? ' (ya cerrada: sus puntos se recalculan)' : ''}. Cuenta para esa jornada y las siguientes hasta que alguien la cambie, y queda firmado con tu nombre.`),
+    h('button', { onclick: () => { UI.editMod = eid + '|' + UI.jornadaEq; UI.borrador = null; render(); } }, 'Cambiar alineación de ' + p.nombre)));
   if (S.admin) bloques.push(panelAdminEquipo(eid, mbs));
   return [h('section', { class: 'panel' }, bloques)];
 }
 
-function editorAlineacion(eid, ab) {
+function editorAlineacion(eid, ab, comoMod = false) {
   const pl = plantillaEn(eid, ab);
-  if (!UI.borrador || UI.borrador.eid !== eid) { const a = alineacionEn(eid, ab); UI.borrador = { eid, titulares: [...a.titulares], suplentes: [...a.suplentes], capitan: a.capitan || null }; }
+  if (!UI.borrador || UI.borrador.eid !== eid || UI.borrador.j !== ab) { const a = alineacionEn(eid, ab); UI.borrador = { eid, j: ab, titulares: [...a.titulares], suplentes: [...a.suplentes], capitan: a.capitan || null }; }
   const B = UI.borrador, c = contar(B.titulares);
   B.formacion = formacionDe(B.titulares);
   if (B.capitan && !B.titulares.includes(B.capitan)) B.capitan = null;
@@ -480,10 +495,11 @@ function editorAlineacion(eid, ab) {
           h('button', { type: 'button', class: 'chipbtn', 'aria-label': 'Subir ' + jug(s).n, disabled: i === 0, onclick: () => { [B.suplentes[i - 1], B.suplentes[i]] = [B.suplentes[i], B.suplentes[i - 1]]; render(); } }, '←'),
           h('button', { type: 'button', class: 'chipbtn', 'aria-label': 'Bajar ' + jug(s).n, disabled: i === B.suplentes.length - 1, onclick: () => { [B.suplentes[i + 1], B.suplentes[i]] = [B.suplentes[i], B.suplentes[i + 1]]; render(); } }, '→')))))),
     h('div', { style: 'display:grid;gap:12px;align-content:start' },
-      h('div', { class: 'row between' }, h('div', {}, h('h3', {}, 'Tu alineación · jornada ' + ab), h('div', { class: 'sub' }, 'Formación ' + B.formacion + ' · 1 POR, 3-5 DEF, 2-6 MED, 1-4 DEL')), h('label', { class: 'f' }, 'Capitán', selCap)),
+      h('div', { class: 'row between' }, h('div', {}, h('h3', {}, (comoMod ? 'Alineación de ' + part(eid).nombre : 'Tu alineación') + ' · jornada ' + ab), h('div', { class: 'sub' }, 'Formación ' + B.formacion + ' · 1 POR, 3-5 DEF, 2-6 MED, 1-4 DEL')), h('label', { class: 'f' }, 'Capitán', selCap)),
       h('div', { class: 'row', style: 'gap:14px' }, estado, h('span', { class: okSup ? 'ok-txt' : 'bad-txt' }, `SUP ${B.suplentes.length}/${N_SUPLENTES}`)),
       h('div', {}, lista),
-      h('div', { class: 'row' }, h('button', { id: 'btnGuardarAl', disabled: !(okTit && okSup), onclick: () => guardarAlineacion(eid, ab) }, 'Guardar alineación'),
+      h('div', { class: 'row' }, h('button', { id: 'btnGuardarAl', disabled: !(okTit && okSup), onclick: () => comoMod ? guardarAlineacionMod(eid, ab) : guardarAlineacion(eid, ab) }, 'Guardar alineación'),
+        comoMod ? h('button', { class: 'ghost', onclick: () => { UI.editMod = null; UI.borrador = null; render(); } }, 'Cancelar') : '',
         h('span', { class: 'sub' }, okTit && okSup ? 'Cuenta para la jornada ' + ab + ' y siguientes, hasta que la cambies.' : 'Necesitas 11 titulares: 1 portero, de 3 a 5 defensas, de 2 a 6 medios y de 1 a 4 delanteros.'))));
 }
 
@@ -556,8 +572,6 @@ function guardarCorreccion(jor, jid, v) {
   guardar(() => S.correcciones[id] ? ref.update({ jugadores }) : ref.set({ jugadores }), v ? 'Corrección guardada. Puntos recalculados.' : 'Corrección quitada.').then(ok => { if (ok) { UI.corrigiendo = null; render(); } });
 }
 
-function vMovimientos() {}
-
 function vMovimientos() {
   const ps = participantes(), ab = jornadaAbierta();
   const lista = movimientos().sort((a, b) => b.desdeJornada - a.desdeJornada || (b.creado || '').localeCompare(a.creado || ''));
@@ -581,20 +595,40 @@ function vMovimientos() {
   const selPart = h('select', { id: 'movPart' }, ps.map(p => h('option', { value: p.id }, p.nombre)));
   const inDesde = h('input', { type: 'number', id: 'movDesde', min: 1, value: ab });
   const selSale = h('select', { id: 'movSale' }), selEntra = h('select', { id: 'movEntra' });
+  const inBusca = h('input', { type: 'text', id: 'movBusca', placeholder: 'Escribe un nombre o un club', autocomplete: 'off' });
+  const resultados = h('div', { id: 'movResultados', class: 'resbusca' });
   const inNota = h('input', { type: 'text', id: 'movNota', placeholder: 'Opcional', maxlength: 80 });
   function rellenar() {
     const desde = Number(inDesde.value) || ab, pl = plantillaEn(selPart.value, desde);
     selSale.replaceChildren(h('option', { value: '' }, 'Elige a quién suelta'), ...pl.map(x => h('option', { value: x }, `${jug(x).p} · ${jug(x).n}`)));
-    const libres = Object.keys(JUG).filter(id => libreDesde(id, desde)).sort((a, b) => POS_ORDEN.indexOf(jug(a).p) - POS_ORDEN.indexOf(jug(b).p) || jug(a).n.localeCompare(jug(b).n));
-    selEntra.replaceChildren(h('option', { value: '' }, 'Elige a quién ficha'), ...POS_ORDEN.map(pos => h('optgroup', { label: pos }, libres.filter(x => jug(x).p === pos).map(x => h('option', { value: x }, `${jug(x).n} (${jug(x).c})`)))));
+    rellenarEntra();
   }
+  // Todos los jugadores, con su estado: libre o de qué equipo es. Los que tiene alguien no se pueden elegir.
+  function rellenarEntra() {
+    const desde = Number(inDesde.value) || ab, q = norm(inBusca.value.trim()), previo = selEntra.value;
+    const todos = Object.keys(JUG).filter(id => !q || norm(jug(id).n + ' ' + jug(id).c).includes(q))
+      .sort((a, b) => POS_ORDEN.indexOf(jug(a).p) - POS_ORDEN.indexOf(jug(b).p) || jug(a).n.localeCompare(jug(b).n));
+    const estado = id => { for (const n of jornadasDesde(desde)) { const d = dueñoDe(id, n); if (d) return d; } return null; };
+    const nLibres = todos.filter(id => !estado(id)).length;
+    selEntra.replaceChildren(h('option', { value: '' }, todos.length ? `Elige a quién ficha (${todos.length} ${todos.length === 1 ? 'jugador' : 'jugadores'}, ${nLibres} ${nLibres === 1 ? 'libre' : 'libres'})` : 'Ningún jugador con ese nombre'),
+      ...POS_ORDEN.map(pos => { const ids = todos.filter(x => jug(x).p === pos); return ids.length ? h('optgroup', { label: pos }, ids.map(x => { const d = estado(x);
+        return h('option', { value: x, disabled: !!d, selected: x === previo }, `${d ? '✗' : '✓'} ${jug(x).n} (${jug(x).c}) · ${d ? 'lo tiene ' + d.nombre : 'LIBRE'}`); })) : ''; }));
+    if (todos.length === 1 && !estado(todos[0])) selEntra.value = todos[0];
+    // Resultados visibles bajo el buscador: estado de cada jugador y, si está libre, se elige con un toque.
+    resultados.replaceChildren(...(q ? todos.slice(0, 8).map(x => { const d = estado(x);
+      return h('div', { class: 'rb' + (selEntra.value === x ? ' sel' : '') }, h('span', { class: 'pchip' }, jug(x).p), h('div', { style: 'min-width:0' }, h('div', {}, jug(x).n), h('div', { class: 'sub' }, jug(x).c)),
+        d ? h('span', { class: 'tag' }, 'Lo tiene ' + d.nombre) : h('button', { type: 'button', class: 'chipbtn', onclick: () => { selEntra.value = x; rellenarEntra(); } }, selEntra.value === x ? '✓ Elegido' : 'Libre · elegir')); })
+      .concat(todos.length > 8 ? [h('div', { class: 'sub' }, `y ${todos.length - 8} más: afina la búsqueda`)] : []) : []));
+  }
+  selEntra.addEventListener('change', rellenarEntra);
+  inBusca.addEventListener('input', rellenarEntra);
   selPart.addEventListener('change', rellenar); inDesde.addEventListener('change', rellenar);
   queueMicrotask(rellenar);
   out.push(h('form', { class: 'panel admin', onsubmit: e => { e.preventDefault(); crearMovimiento(); } },
     h('h3', {}, 'Registrar un fichaje'),
     h('p', { class: 'sub', style: 'margin:4px 0 12px' }, 'Fichaje «x por y»: x tiene que estar libre (no lo tiene ningún equipo) e y pasa a estar libre. Cuenta desde la jornada indicada; x ocupa el sitio de y en la alineación. Si el jugador que buscas no aparece, pídeme que lo añada a la lista.'),
     h('div', { class: 'row', style: 'align-items:end' }, h('label', { class: 'f' }, 'Equipo que lo hace', selPart), h('label', { class: 'f' }, 'Desde jornada', inDesde)),
-    h('div', { class: 'row', style: 'align-items:end;margin-top:10px' }, h('label', { class: 'f' }, 'Ficha a (x, solo libres)', selEntra), h('label', { class: 'f' }, 'Por (y, se suelta)', selSale), h('label', { class: 'f' }, 'Nota', inNota),
+    h('div', { class: 'row', style: 'align-items:end;margin-top:10px' }, h('div', { class: 'f', style: 'display:grid;gap:6px' }, h('label', { class: 'f' }, 'Buscar jugador', inBusca), resultados), h('label', { class: 'f' }, 'Ficha a (x) · ✓ libre, ✗ lo tiene otro equipo', selEntra), h('label', { class: 'f' }, 'Por (y, se suelta)', selSale), h('label', { class: 'f' }, 'Nota', inNota),
       h('button', { type: 'submit', id: 'btnMov' }, 'Registrar fichaje'))));
   return out;
 }
@@ -726,6 +760,12 @@ async function guardarAlineacion(eid, ab) {
   const historial = { ...(d?.historial || {}), [ab]: { formacion: B.formacion, titulares: B.titulares, suplentes: B.suplentes, capitan: B.capitan || null, equipo: eid, guardado: new Date().toISOString() } };
   if (await guardar(() => S.db.doc('alineaciones/' + S.yo).update({ historial }), 'Alineación guardada para la jornada ' + ab)) UI.borrador = null;
 }
+// El administrador o un moderador cambia la alineación de cualquier equipo: correcciones/alineaciones.equipos[eid][jornada].
+async function guardarAlineacionMod(eid, j) {
+  const B = UI.borrador, actual = S.correcciones.alineaciones?.equipos || {};
+  const equipos = { ...actual, [eid]: { ...(actual[eid] || {}), [j]: { formacion: B.formacion, titulares: B.titulares, suplentes: B.suplentes, capitan: B.capitan || null, equipo: eid, guardado: new Date().toISOString(), autor: S.yo, fuente: 'moderador' } } };
+  if (await guardar(() => S.db.doc('correcciones/alineaciones').set({ equipos }), `Alineación de ${part(eid).nombre} guardada para la jornada ${j}`)) { UI.borrador = null; UI.editMod = null; render(); }
+}
 // Quitar a alguien no borra sus alineaciones pasadas: siguen contando para las jornadas en que las guardó.
 function liberar(uid) {
   const d = S.alineaciones.find(a => a._id === uid);
@@ -765,7 +805,7 @@ function borrarMovimiento(m) {
 function nombreDe(uid) { return uid === S.yo ? 'ti' : (S.nombres[uid] || 'otro participante'); }
 async function cargarNombres() {
   if (!S.user) return;
-  const ids = [...new Set([...S.alineaciones.map(a => a._id), ...S.movsDb.map(m => m.autor), ...(S.ajustes?.moderadores || []), ...(window.LIGA_WEB?.propietario?.admins || []), ...Object.values(S.correcciones).flatMap(c => Object.values(c.jugadores || {}).map(x => x.autor))].filter(Boolean))].filter(id => !(id in S.nombres));
+  const ids = [...new Set([...S.alineaciones.map(a => a._id), ...S.movsDb.map(m => m.autor), ...(S.ajustes?.moderadores || []), ...(window.LIGA_WEB?.propietario?.admins || []), ...Object.values(S.correcciones).flatMap(c => Object.values(c.jugadores || {}).map(x => x.autor)), ...Object.values(S.correcciones.alineaciones?.equipos || {}).flatMap(e => Object.values(e).map(x => x.autor))].filter(Boolean))].filter(id => !(id in S.nombres));
   if (!ids.length) return;
   try { const ps = await S.user.profiles(ids); for (const id of ids) S.nombres[id] = ps?.[id]?.name || ''; render(); } catch {}
 }
