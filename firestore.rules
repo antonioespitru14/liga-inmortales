@@ -21,5 +21,8 @@ service cloud.firestore {
     match /alineaciones/{uid} { allow read: if true; allow write: if dentro() && (request.auth.uid == uid || admin()); }
     match /correcciones/{id} { allow read: if true; allow write: if moderador(); }
     match /usuarios/{uid} { allow read: if true; allow write: if dentro() && request.auth.uid == uid; }
+
+    // BetFire (porra entre amigos, /betfire): cada uno escribe solo su propio documento.
+    match /betfire_members/{uid} { allow read: if dentro(); allow write: if dentro() && request.auth.uid == uid; }
   }
 }

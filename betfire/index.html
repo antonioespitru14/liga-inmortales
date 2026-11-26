@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
+<title>BetFire 🔥</title>
+<script src="../config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: single column "betting slips" feed under a sticky tab bar; ranking as a scoreboard table. */
+:root{
+  --bg:#f3f1fa; --surface:#ffffff; --ink:#1d1830; --muted:#6a6385; --line:#ddd8ec;
+  --accent:#e2335f; --accent-ink:#ffffff; --accent-soft:#fde4ea;
+  --gold:#b7840b; --ok:#13865a; --ok-soft:#dcf3e8; --warn:#9a5b00; --warn-soft:#fdf0d8;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15111f; --surface:#1f1a2e; --ink:#efeaff; --muted:#a59dc2; --line:#342c4a;
+  --accent:#ff5c84; --accent-ink:#1a0710; --accent-soft:#3d1a28;
+  --gold:#f2c14e; --ok:#4fd39a; --ok-soft:#163528; --warn:#f3b55a; --warn-soft:#3a2a12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15111f; --surface:#1f1a2e; --ink:#efeaff; --muted:#a59dc2; --line:#342c4a;
+  --accent:#ff5c84; --accent-ink:#1a0710; --accent-soft:#3d1a28;
+  --gold:#f2c14e; --ok:#4fd39a; --ok-soft:#163528; --warn:#f3b55a; --warn-soft:#3a2a12; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:8px 14px}
+h1{font:800 clamp(28px,6vw,40px)/1 var(--display);margin:0;letter-spacing:-.02em}
+h1 span{color:var(--accent)}
+.sub{color:var(--muted);margin:6px 0 0;font-size:14px}
+.me{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.me b{color:var(--ink)}
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:4px;padding-block:8px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+nav.tabs button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:8px 12px;border-radius:999px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+nav.tabs .count{font:700 11px var(--mono);margin-left:4px;opacity:.8}
+h2{font:700 20px/1.2 var(--display);margin:0 0 10px;text-wrap:balance}
+h3{font:600 12px var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:22px 0 10px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.slip{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.slip .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+.pill{font:700 11px var(--mono);text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:999px}
+.pill.open{background:var(--accent-soft);color:var(--accent)}
+.pill.closed{background:var(--warn-soft);color:var(--warn)}
+.pill.done{background:var(--ok-soft);color:var(--ok)}
+.q{font:700 19px/1.3 var(--display);margin:0;overflow-wrap:anywhere}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{position:relative;display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:10px;padding:10px 12px;font:500 15px var(--body);overflow:hidden}
+button.opt{cursor:pointer}
+button.opt:hover{border-color:var(--accent)}
+.opt .bar{position:absolute;inset:0 auto 0 0;background:var(--accent-soft);z-index:0;transition:width .3s}
+.opt > *:not(.bar){position:relative;z-index:1}
+.opt .label{flex:1;min-width:0;overflow-wrap:anywhere}
+.opt .odds{font:700 13px var(--mono);color:var(--muted);white-space:nowrap}
+.opt.mine{border-color:var(--accent)}
+.opt.pick{background:var(--accent-soft)}
+.tally{font-size:14px;color:var(--muted)}
+.tally b{font:700 15px var(--mono);color:var(--ink)}
+.opt.mine:not(.pick) .label::after{content:" · tu voto";font-size:12px;color:var(--accent);font-weight:600}
+.opt.correct{border-color:var(--ok)}
+.opt.correct .bar{background:var(--ok-soft)}
+.opt.correct .odds{color:var(--ok)}
+.who{font-size:12px;color:var(--muted);margin-top:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:0;border-radius:10px;padding:10px 14px;font:600 14px var(--body);cursor:pointer;background:var(--ink);color:var(--bg)}
+.btn.accent{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn.small{padding:6px 10px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{font-size:13px;color:var(--muted)}
+.result{font-size:14px;background:var(--ok-soft);color:var(--ok);padding:8px 12px;border-radius:10px;font-weight:500}
+.result.none{background:var(--warn-soft);color:var(--warn)}
+input[type=text],select{width:100%;font:500 15px var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)}
+.optrow{display:flex;gap:8px}
+.optrow input{flex:1;min-width:0}
+.empty{border:1.5px dashed var(--line);border-radius:14px;padding:22px;text-align:center;color:var(--muted)}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 14px;font-size:14px}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+td.num{font:700 15px var(--mono);text-align:right}
+th.num{text-align:right}
+td.pos{font:800 18px var(--display);width:44px}
+tr.lead td.pos{color:var(--gold)}
+tr.isme td{background:var(--accent-soft)}
+.formula{font:700 18px var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;margin:10px 0}
+.prose p{margin:0 0 10px;max-width:65ch}
+.prose ul{margin:0 0 10px;padding-left:20px;max-width:65ch}
+.example{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.example div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;color:var(--muted)}
+.example b{display:block;font:700 22px var(--mono);color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px;z-index:20;max-width:calc(100% - 32px)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--warn)}
+.ruleta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:640px){.ruleta{grid-template-columns:minmax(0,1fr)}}
+.wheel-box{position:relative;max-width:420px;width:100%;margin:0 auto}
+.wheel{display:block;width:100%;height:auto;aspect-ratio:1;max-width:100%}
+.pointer{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:28px solid var(--ink);z-index:2;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25))}
+.spin-result{font:700 22px/1.3 var(--display);min-height:1.3em}
+.spin-result b{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 12px;font-size:14px;max-width:100%;overflow-wrap:anywhere}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:999px}
+.chip button:hover{color:var(--accent)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Bet<span>Fire</span> 🔥</h1>
+      <p class="sub">Una pregunta por persona cada 3 días. Acierta lo que nadie ve venir.</p>
+    </div>
+    <div class="me" id="me"></div>
+  </header>
+
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="votar" aria-selected="true">Votar<span class="count" id="c-votar"></span></button>
+    <button role="tab" data-tab="resolver">Por resolver<span class="count" id="c-resolver"></span></button>
+    <button role="tab" data-tab="nueva">Nueva pregunta</button>
+    <button role="tab" data-tab="ranking">Ranking</button>
+    <button role="tab" data-tab="historial">Terminadas</button>
+    <button role="tab" data-tab="reglas">Cómo se puntúa</button>
+    <button role="tab" data-tab="ruleta">Ruleta</button>
+  </nav>
+
+  <main id="view"><div class="empty">Conectando con la porra…</div></main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+const THREE_DAYS = 3*24*3600*1000;
+const S = { db:null, user:null, uid:null, members:{}, loaded:false, tab:"votar", readOnly:false, offline:false, confirmDel:null, nameEdit:false };
+const $ = (s)=>document.querySelector(s);
+const el = (tag, attrs={}, ...kids)=>{ const e=document.createElement(tag); for(const [k,v] of Object.entries(attrs)){ if(k==="class") e.className=v; else if(k.startsWith("on")) e.addEventListener(k.slice(2),v); else if(v!==false && v!=null) e.setAttribute(k, v===true?"":v); } for(const k of kids.flat()){ if(k==null||k===false) continue; e.append(k.nodeType?k:document.createTextNode(String(k))); } return e; };
+const fmt = (n)=> (Math.round(n*10)/10).toLocaleString("es-ES",{maximumFractionDigits:1});
+const ago = (t)=>{ const d=Date.now()-t; const m=Math.round(d/60000); if(m<60) return `hace ${Math.max(1,m)} min`; const h=Math.round(m/60); if(h<48) return `hace ${h} h`; return `hace ${Math.round(h/24)} días`; };
+const left = (ms)=>{ const h=Math.ceil(ms/3600000); return h>=24?`${Math.floor(h/24)} d ${h%24} h`:`${h} h`; };
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
+const nameOf = (id)=> (S.members[id] && S.members[id].name) || "Alguien";
+const me = ()=> S.members[S.uid];
+
+/* ---------- derived state ---------- */
+function allQuestions(){
+  const out=[];
+  for(const [authorId,m] of Object.entries(S.members)){
+    for(const [qid,q] of Object.entries(m.questions||{})){ if(q && q.text) out.push({...q,id:qid,authorId}); }
+  }
+  return out.sort((a,b)=>b.createdAt-a.createdAt);
+}
+const DAY = 24*3600*1000;
+const deadline = (q)=> q.createdAt + DAY;
+function allVoted(q){ const n=Object.keys(S.members).length; return n>0 && votesFor(q).length>=n; }
+function status(q){ if(q.correct!=null) return "done"; if(q.closedAt || Date.now()>=deadline(q) || allVoted(q)) return "closed"; return "open"; }
+/* Votes count only if cast before the 24 h limit and before any manual close. */
+function votesFor(q){
+  const cutoff = Math.min(q.closedAt||Infinity, q.resolvedAt||Infinity, deadline(q));
+  const list=[];
+  for(const [uid,m] of Object.entries(S.members)){
+    const v = m.votes && m.votes[q.id];
+    if(v && typeof v.o==="number" && v.o>=0 && v.o<q.options.length && (v.at||0)<=cutoff) list.push({uid,o:v.o});
+  }
+  return list;
+}
+function scoring(){
+  const score={};
+  for(const id of Object.keys(S.members)) score[id]={id,pts:0,hits:0,played:0,best:0};
+  for(const q of allQuestions()){
+    if(q.correct==null) continue;
+    const vs=votesFor(q); const n=vs.length; const k=vs.filter(v=>v.o===q.correct).length;
+    for(const v of vs){
+      const s=score[v.uid]; if(!s) continue; s.played++;
+      if(v.o===q.correct && k>0){ const p=n/k; s.pts+=p; s.hits++; s.best=Math.max(s.best,p); }
+    }
+  }
+  return Object.values(score).sort((a,b)=>b.pts-a.pts||b.hits-a.hits||nameOf(a.id).localeCompare(nameOf(b.id)));
+}
+function nextAllowed(){
+  const mine=Object.values((me()&&me().questions)||{}).filter(q=>q&&q.createdAt);
+  if(!mine.length) return 0;
+  return Math.max(...mine.map(q=>q.createdAt))+THREE_DAYS;
+}
+
+/* ---------- writes (each person only writes their own doc) ---------- */
+async function write(fn, okMsg){
+  if(S.readOnly){ toast("No tienes permiso para guardar."); return false; }
+  try{ await fn(S.db.doc("members/"+S.uid)); if(okMsg) toast(okMsg); return true; }
+  catch(e){
+    if(e && (e.code==="invalid_argument"||e.code==="permission-denied")){ S.readOnly=true; render(); toast("No tienes permiso para guardar. Revisa las reglas de Firestore."); }
+    else if(e && e.code==="quota_exceeded") toast("La porra está llena: borrad preguntas antiguas.");
+    else toast("No se pudo guardar. Inténtalo de nuevo.");
+    return false;
+  }
+}
+const vote = (q,o)=>{
+  if(me() && me().votes && me().votes[q.id]){ toast("Ya has votado. El voto es definitivo."); return; }
+  if(status(q)!=="open"){ toast("La votación ya está cerrada."); render(); return; }
+  S.pending=null;
+  return write(d=>d.update({votes:{[q.id]:{o,at:Date.now()}}}), "Voto guardado");
+};
+const closeQ = (q)=> write(d=>d.update({questions:{[q.id]:{closedAt:Date.now()}}}), "Votación cerrada");
+const resolveQ = (q,c)=> write(d=>d.update({questions:{[q.id]:{correct:c,resolvedAt:Date.now(),closedAt:q.closedAt||Date.now()}}}), "¡Resultado publicado!");
+const deleteQ = async (q)=>{ const m=structuredClone(me()); delete m.questions[q.id]; S.confirmDel=null; return write(d=>d.set(m),"Pregunta borrada"); };
+
+/* ---------- views ---------- */
+function slip(q){
+  const st=status(q); const vs=votesFor(q); const n=vs.length; const total=Object.keys(S.members).length;
+  const counts=q.options.map((_,i)=>vs.filter(v=>v.o===i).length);
+  const myVote = (me()&&me().votes&&me().votes[q.id]) ? me().votes[q.id].o : null;
+  const isAuthor = q.authorId===S.uid;
+  const canVote = st==="open" && !S.readOnly && me() && myVote==null;
+  const pend = S.pending && S.pending.qid===q.id ? S.pending.o : null;
+  const pillTxt = {open:"Abierta",closed:"Votación cerrada",done:"Terminada"}[st];
+  let opts;
+  if(st==="done"){
+    opts = q.options.map((label,i)=>{
+      const c=counts[i]; const pct=n?Math.round(c/n*100):0;
+      const cls="opt"+(myVote===i?" mine":"")+(q.correct===i?" correct":"");
+      const names=vs.filter(v=>v.o===i).map(v=>nameOf(v.uid));
+      return el("div",{}, el("div",{class:cls}, el("span",{class:"bar",style:`width:${pct}%`}), el("span",{class:"label"},label), el("span",{class:"odds"},`${c} ${c===1?"voto":"votos"}`)), names.length?el("div",{class:"who"},names.join(", ")):null);
+    });
+  } else {
+    opts = q.options.map((label,i)=>{
+      const cls="opt"+(myVote===i?" mine":"")+(pend===i?" mine pick":"");
+      const inner=[el("span",{class:"label"},label)];
+      return canVote ? el("button",{class:cls,type:"button",onclick:()=>{S.pending={qid:q.id,o:i};render();}},...inner) : el("div",{class:cls},...inner);
+    });
+  }
+  const timeTxt = st==="open" ? ` · cierra en ${left(deadline(q)-Date.now())}` : "";
+  const parts=[
+    el("div",{class:"meta"}, el("span",{class:"pill "+st},pillTxt), el("span",{},`De ${isAuthor?"ti":nameOf(q.authorId)} · ${ago(q.createdAt)}${timeTxt}`)),
+    el("p",{class:"q"},q.text),
+    el("div",{class:"opts"},...opts)
+  ];
+  if(st!=="done") parts.push(el("div",{class:"tally"}, el("b",{},`${n} de ${total}`), ` ${total===1?"persona ha":"personas han"} votado`));
+  if(canVote){
+    if(pend!=null) parts.push(el("div",{class:"row"}, el("button",{class:"btn accent",onclick:()=>vote(q,pend)},`Confirmar voto: «${q.options[pend]}»`), el("button",{class:"btn ghost",onclick:()=>{S.pending=null;render();}},"Cancelar"), el("span",{class:"note"},"No se puede cambiar después.")));
+    else parts.push(el("div",{class:"note"},"Elige una opción y confírmala. El voto es definitivo y nadie verá qué has votado hasta el final."));
+  } else if(st==="open" && myVote!=null) parts.push(el("div",{class:"note"},"Ya has votado. Se cierra cuando voten todos o pasen 24 horas."));
+  if(st==="closed" && !isAuthor) parts.push(el("div",{class:"note"},`Esperando a que ${nameOf(q.authorId)} diga qué pasó.`));
+  if(st==="done"){
+    const k=counts[q.correct]; const winners=vs.filter(v=>v.o===q.correct).map(v=>nameOf(v.uid));
+    parts.push(el("div",{class:"result"+(k?"":" none")}, k ? `Correcta: «${q.options[q.correct]}». Acertaron ${winners.join(", ")} (${k} de ${n}) y cada uno se lleva ${fmt(n/k)} puntos.` : `Correcta: «${q.options[q.correct]}». Nadie acertó, así que no hay puntos.`));
+  }
+  if(isAuthor && !S.readOnly && st!=="done"){
+    const ctrl=el("div",{class:"stack",style:"gap:8px"});
+    if(st==="open") ctrl.append(el("div",{class:"row"}, el("button",{class:"btn ghost small",onclick:()=>closeQ(q)},"Cerrar votación ya"), el("span",{class:"note"},"Por si lo que se apuesta empieza antes de que voten todos.")));
+    else {
+      const sel=el("select",{id:"res-"+q.id,"aria-label":"Opción correcta"}, el("option",{value:""},"¿Qué pasó al final?"), ...q.options.map((o,i)=>el("option",{value:i},o)));
+      ctrl.append(el("div",{class:"row"}, el("div",{style:"flex:1;min-width:180px"},sel), el("button",{class:"btn accent small",onclick:()=>{ if(sel.value===""){toast("Elige la opción correcta");return;} resolveQ(q,+sel.value); }},"Marcar como correcta")));
+    }
+    if(S.confirmDel===q.id) ctrl.append(el("div",{class:"confirm"},"¿Borrar esta pregunta y sus votos?", el("button",{class:"btn small accent",onclick:()=>deleteQ(q)},"Sí, borrar"), el("button",{class:"btn small ghost",onclick:()=>{S.confirmDel=null;render();}},"Cancelar")));
+    else ctrl.append(el("div",{}, el("button",{class:"btn ghost small",onclick:()=>{S.confirmDel=q.id;render();}},"Borrar pregunta")));
+    parts.push(el("h3",{style:"margin:4px 0 0"},"Solo tú ves esto"), ctrl);
+  }
+  return el("article",{class:"slip"},...parts);
+}
+
+function viewList(filter, emptyMsg){
+  const qs=allQuestions().filter(filter);
+  if(!qs.length) return el("div",{class:"empty"},emptyMsg);
+  return el("div",{class:"stack"},...qs.map(slip));
+}
+
+function viewNueva(){
+  if(S.readOnly) return el("div",{class:"banner"},"Estás en modo solo lectura: no puedes publicar preguntas.");
+  const wait = nextAllowed()-Date.now();
+  if(wait>0) return el("div",{class:"stack"}, el("h2",{},"Tu próxima pregunta"), el("div",{class:"empty"},`Ya pusiste tu pregunta. Podrás poner otra dentro de ${left(wait)}.`));
+  const form=el("form",{class:"stack",id:"newq"});
+  const text=el("input",{type:"text",id:"q-text",maxlength:"160",placeholder:"¿Ligará Marco esta noche de fiesta?",required:true});
+  const optsBox=el("div",{class:"stack",style:"gap:8px"});
+  const addOpt=(v="")=>{ const i=optsBox.children.length; const inp=el("input",{type:"text",id:"q-opt-"+i,maxlength:"80",placeholder:`Opción ${i+1}`,value:v}); const row=el("div",{class:"optrow"},inp, el("button",{type:"button",class:"btn ghost small","aria-label":"Quitar opción",onclick:()=>{ if(optsBox.children.length>2){row.remove();} }},"✕")); optsBox.append(row); };
+  addOpt("Sí"); addOpt("No");
+  form.append(
+    el("h2",{},"Nueva pregunta"),
+    el("p",{class:"note"},"Pon algo que se sepa pronto: una fiesta, un examen, una cita. Puedes publicar una cada 3 días."),
+    el("label",{class:"f",for:"q-text"},"Pregunta",text),
+    el("div",{class:"f",style:"display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)"},"Opciones",optsBox),
+    el("div",{class:"row"}, el("button",{type:"button",class:"btn ghost small",onclick:()=>{ if(optsBox.children.length<8) addOpt(); else toast("Máximo 8 opciones"); }},"+ Añadir opción")),
+    el("div",{}, el("button",{type:"submit",class:"btn accent"},"Publicar pregunta"))
+  );
+  form.addEventListener("submit",async(e)=>{
+    e.preventDefault();
+    const t=text.value.trim(); const opts=[...optsBox.querySelectorAll("input")].map(i=>i.value.trim()).filter(Boolean);
+    if(!t){toast("Escribe la pregunta");return;}
+    if(new Set(opts.map(o=>o.toLowerCase())).size!==opts.length){toast("Hay opciones repetidas");return;}
+    if(opts.length<2){toast("Pon al menos 2 opciones");return;}
+    if(nextAllowed()>Date.now()){toast("Aún no te toca");return;}
+    const id="q"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const ok=await write(d=>d.update({questions:{[id]:{text:t,options:opts,createdAt:Date.now(),closedAt:null,correct:null,resolvedAt:null}}}),"Pregunta publicada");
+    if(ok){ S.tab="votar"; render(); }
+  });
+  return form;
+}
+
+function viewRanking(){
+  const rows=scoring();
+  if(!rows.length) return el("div",{class:"empty"},"Todavía no hay nadie apuntado.");
+  const anyPts = rows.some(r=>r.played>0);
+  const tb=el("tbody");
+  rows.forEach((r,i)=>{
+    tb.append(el("tr",{class:(i===0&&r.pts>0?"lead ":"")+(r.id===S.uid?"isme":"")},
+      el("td",{class:"pos"},i+1), el("td",{},nameOf(r.id)+(r.id===S.uid?" (tú)":"")),
+      el("td",{class:"num"},fmt(r.pts)), el("td",{class:"num"},`${r.hits}/${r.played}`), el("td",{class:"num"},r.best?fmt(r.best):"—")));
+  });
+  return el("div",{class:"stack"},
+    el("h2",{},"Ranking"),
+    anyPts?null:el("p",{class:"note"},"Aún no se ha resuelto ninguna pregunta. Los puntos aparecerán aquí."),
+    el("div",{class:"tablewrap"}, el("table",{}, el("thead",{},el("tr",{},el("th",{},"#"),el("th",{},"Jugador"),el("th",{class:"num"},"Puntos"),el("th",{class:"num"},"Aciertos"),el("th",{class:"num"},"Mejor golpe"))), tb)),
+    el("p",{class:"note"},"Aciertos = preguntas acertadas de las resueltas en las que votaste. Mejor golpe = los puntos más altos ganados en una sola pregunta.")
+  );
+}
+
+function viewReglas(){
+  return el("div",{class:"prose"},
+    el("h2",{},"Cómo se puntúa"),
+    el("p",{},"Cuando se resuelve una pregunta, los votos se reparten como en una porra: cuanta menos gente acierte, más vale el acierto."),
+    el("div",{class:"formula"},"puntos = votantes ÷ acertantes"),
+    el("p",{},"Ejemplo con 10 personas que votan:"),
+    el("div",{class:"example"},
+      el("div",{},el("b",{},"10"),"puntos si solo aciertas tú"),
+      el("div",{},el("b",{},"2"),"puntos cada uno si aciertan 5"),
+      el("div",{},el("b",{},"1"),"punto cada uno si aciertan los 10"),
+      el("div",{},el("b",{},"0"),"puntos si fallas")),
+    
+    el("h3",{},"Normas"),
+    el("ul",{},
+      el("li",{},"Cada persona publica una pregunta cada 3 días, con las opciones que quiera."),
+      el("li",{},"Votan todos, incluido quien la ha puesto. El voto es definitivo: no se puede cambiar."),
+      el("li",{},"La votación se cierra sola a las 24 horas o en cuanto hayan votado todos. El autor también puede cerrarla antes."),
+      el("li",{},"Mientras está abierta solo se ve cuánta gente ha votado, no qué ha votado cada uno."),
+      el("li",{},"Cuando se sabe el resultado, el autor marca la opción correcta y la apuesta pasa a «Terminadas», con quién acertó y cuántos puntos se llevó."))
+  );
+}
+
+function viewJoin(){
+  const inp=el("input",{type:"text",id:"join-name",maxlength:"24",placeholder:"Tu nombre o apodo",required:true});
+  if(S.prefill) inp.value=S.prefill;
+  const f=el("form",{class:"slip"}, el("h2",{},"Únete a la porra"), el("p",{class:"note"},"Elige el nombre con el que te verán tus amigos en el ranking."), el("label",{class:"f",for:"join-name"},"Nombre",inp), el("div",{},el("button",{class:"btn accent",type:"submit"},"Entrar")));
+  f.addEventListener("submit",async e=>{ e.preventDefault(); const n=inp.value.trim(); if(!n){toast("Escribe un nombre");return;}
+    if(Object.entries(S.members).some(([id,m])=>id!==S.uid&&(m.name||"").toLowerCase()===n.toLowerCase())){toast("Ese nombre ya está cogido");return;}
+    await write(d=>d.set({name:n,joinedAt:Date.now(),questions:{},votes:{}}),`¡Bienvenido, ${n}!`); });
+  return f;
+}
+
+/* ---------- ruleta (independiente de la porra; nombres guardados en este dispositivo) ---------- */
+function viewRuleta(){
+  if(S.ruletaNode) return S.ruletaNode;
+  const KEY="betfire-ruleta";
+  let names=[];
+  try{ const v=JSON.parse(localStorage.getItem(KEY)||"null"); if(Array.isArray(v)) names=v.filter(x=>typeof x==="string"); }catch(e){}
+  const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(names)); }catch(e){} };
+  let angle=0, spinning=false;
+  const cv=el("canvas",{width:"640",height:"640",class:"wheel","aria-label":"Ruleta"});
+  const result=el("div",{class:"spin-result","aria-live":"polite"});
+  const chips=el("div",{class:"chips"});
+  const inp=el("input",{type:"text",id:"ruleta-name",maxlength:"30",placeholder:"Añade un nombre"});
+  const spinBtn=el("button",{class:"btn accent",type:"button"},"Girar la ruleta");
+  const colors=(i,n)=>`hsl(${Math.round(i*360/n+340)%360} 78% ${i%2?66:58}%)`;
+  function draw(){
+    const ctx=cv.getContext("2d"), W=cv.width, R=W/2-8, cx=W/2, cy=W/2;
+    ctx.clearRect(0,0,W,W);
+    const n=names.length;
+    if(!n){ ctx.fillStyle=getComputedStyle(document.body).getPropertyValue("--line")||"#ccc"; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill(); return; }
+    const seg=Math.PI*2/n;
+    for(let i=0;i<n;i++){
+      const a0=angle+i*seg-Math.PI/2;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a0+seg); ctx.closePath();
+      ctx.fillStyle=n===1?colors(0,1):colors(i,n); ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,.7)"; ctx.lineWidth=3; ctx.stroke();
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(a0+seg/2); ctx.textAlign="right"; ctx.textBaseline="middle";
+      ctx.fillStyle="#1d1830"; const fs=Math.max(16,Math.min(34,320/n+10)); ctx.font=`700 ${fs}px Inter, system-ui, sans-serif`;
+      let t=names[i]; while(ctx.measureText(t).width>R-70 && t.length>2) t=t.slice(0,-2)+"…";
+      ctx.fillText(t,R-24,0); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(cx,cy,34,0,Math.PI*2); ctx.fillStyle="#1d1830"; ctx.fill();
+    ctx.font="34px serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("🔥",cx,cy+2);
+  }
+  function renderChips(){
+    chips.replaceChildren(...names.map((nm,i)=>el("span",{class:"chip"},nm, el("button",{type:"button","aria-label":"Quitar "+nm,onclick:()=>{ if(spinning) return; names.splice(i,1); save(); renderChips(); draw(); }},"✕"))));
+    spinBtn.disabled=names.length<2;
+  }
+  function add(){ const v=inp.value.trim(); if(!v) return; if(names.length>=40){toast("Máximo 40 nombres");return;} names.push(v); inp.value=""; save(); renderChips(); draw(); inp.focus(); }
+  spinBtn.addEventListener("click",()=>{
+    if(spinning||names.length<2) return; spinning=true; spinBtn.disabled=true; result.textContent="Girando…";
+    const n=names.length, seg=Math.PI*2/n, win=Math.floor(Math.random()*n);
+    // pointer is at the top: segment win's centre must end at angle 0 (top)
+    const jitter=(Math.random()-.5)*seg*.7;
+    let target=-(win*seg+seg/2)+jitter; const base=angle%(Math.PI*2);
+    while(target<base) target+=Math.PI*2; target+=Math.PI*2*(5+Math.floor(Math.random()*3));
+    const from=angle, dur=matchMedia("(prefers-reduced-motion: reduce)").matches?600:4500, t0=performance.now();
+    const ease=t=>1-Math.pow(1-t,4);
+    (function step(now){ const t=Math.min(1,(now-t0)/dur); angle=from+(target-from)*ease(t); draw();
+      if(t<1) requestAnimationFrame(step); else { spinning=false; spinBtn.disabled=names.length<2; result.replaceChildren("Le toca a ", el("b",{},names[win]), " 🔥"); } })(t0);
+  });
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); add(); } });
+  const node=el("div",{class:"ruleta"},
+    el("div",{class:"wheel-box"}, el("div",{class:"pointer"}), cv),
+    el("div",{class:"stack",style:"min-width:0"},
+      el("h2",{},"Ruleta"),
+      el("p",{class:"note"},"Pon los nombres que quieras y gírala. No tiene nada que ver con la porra. Los nombres se guardan en este móvil u ordenador."),
+      result,
+      spinBtn,
+      el("div",{class:"optrow"}, inp, el("button",{class:"btn small",type:"button",onclick:add},"Añadir")),
+      chips,
+      el("div",{}, el("button",{class:"btn ghost small",type:"button",onclick:()=>{ if(spinning) return; names=[]; save(); renderChips(); draw(); result.textContent=""; }},"Vaciar lista"))
+    ));
+  renderChips(); draw();
+  S.ruletaNode=node; return node;
+}
+
+function renderMe(){
+  const box=$("#me"); box.replaceChildren();
+  if(!me()){ if(S.authed) box.append(el("button",{class:"btn ghost small",onclick:()=>S.logout()},"Salir")); return; }
+  if(S.nameEdit){
+    const inp=el("input",{type:"text",id:"edit-name",maxlength:"24",value:me().name,style:"width:150px;padding:6px 8px"});
+    box.append(inp, el("button",{class:"btn small",onclick:async()=>{ const n=inp.value.trim(); if(n&&n!==me().name){ await write(d=>d.update({name:n}),"Nombre cambiado"); } S.nameEdit=false; renderMe(); }},"Guardar"));
+  } else {
+    box.append(el("span",{},"Juegas como ",el("b",{},me().name)));
+    if(!S.readOnly) box.append(el("button",{class:"btn ghost small",onclick:()=>{S.nameEdit=true;renderMe();}},"Cambiar"));
+    box.append(el("button",{class:"btn ghost small",onclick:()=>S.logout()},"Salir"));
+  }
+}
+
+function render(){
+  for(const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", b.dataset.tab===S.tab?"true":"false");
+  const view=$("#view");
+  if(S.tab==="ruleta"){ view.replaceChildren(viewRuleta()); return; }
+  if(S.configMissing){ view.replaceChildren(el("div",{class:"banner"},"No se encontró la configuración de Firebase (config.js).")); return; }
+  if(!S.db || S.authed===undefined){ view.replaceChildren(el("div",{class:"empty"},"Conectando…")); return; }
+  if(!S.authed){ $("#me").replaceChildren(); view.replaceChildren(el("div",{class:"slip",style:"align-items:flex-start"}, el("h2",{},"Entra para jugar"), el("p",{class:"note"},"Inicia sesión con tu cuenta de Google. Solo hace falta la primera vez: el navegador te recordará."), el("button",{class:"btn accent",onclick:()=>S.login()},"Entrar con Google"))); return; }
+  if(!S.loaded){ view.replaceChildren(el("div",{class:"empty"}, S.offline ? "La porra tarda en responder. Revisa tu conexión; seguimos intentándolo." : "Cargando preguntas…")); return; }
+  renderMe();
+  const qs=allQuestions();
+  $("#c-votar").textContent = qs.filter(q=>status(q)==="open").length || "";
+  $("#c-resolver").textContent = qs.filter(q=>status(q)==="closed").length || "";
+  const banner = S.readOnly ? el("div",{class:"banner",style:"margin-bottom:14px"},"Puedes ver la porra, pero no guardar votos. Revisa las reglas de Firestore.") : null;
+  if(!me() && !S.readOnly && S.uid){ view.replaceChildren(viewJoin()); return; }
+  let body;
+  switch(S.tab){
+    case "votar": body=viewList(q=>status(q)==="open","No hay preguntas abiertas. ¡Pon tú la primera en «Nueva pregunta»!"); break;
+    case "resolver": body=viewList(q=>status(q)==="closed","Nada pendiente. Aquí aparecen las preguntas ya cerradas que esperan el resultado."); break;
+    case "nueva": body=viewNueva(); break;
+    case "ranking": body=viewRanking(); break;
+    case "historial": body=viewList(q=>status(q)==="done","Aún no se ha resuelto ninguna pregunta."); break;
+    default: body=viewReglas();
+  }
+  view.replaceChildren(...[banner,body].filter(Boolean));
+}
+
+document.querySelector("#tabs").addEventListener("click",e=>{ const b=e.target.closest("button[data-tab]"); if(!b) return; S.tab=b.dataset.tab; S.confirmDel=null; render(); });
+
+render();
+/* ---------- boot (Firebase: Google sign-in + Firestore) ---------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = window.FIREBASE_CONFIG || { apiKey: "PEGA_AQUI" }; /* sale de ../config.js (mismo proyecto que la liga) */
+const COLLECTION = "betfire_members";
+/* ================================================================= */
+
+if(firebaseConfig.apiKey==="PEGA_AQUI"){ S.configMissing=true; render(); }
+else {
+  const app=initializeApp(firebaseConfig); const auth=getAuth(app); const fs=getFirestore(app);
+  const provider=new GoogleAuthProvider(); provider.setCustomParameters({prompt:"select_account"});
+  S.login=async()=>{ try{ await signInWithPopup(auth,provider); }catch(e){ if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment")) signInWithRedirect(auth,provider); else if(e&&e.code!=="auth/popup-closed-by-user"&&e.code!=="auth/cancelled-popup-request") toast("No se pudo iniciar sesión: "+(e.code||"error")); } };
+  S.logout=()=>signOut(auth);
+  /* tiny adapter so the app code keeps the same shape */
+  S.db={ doc:(p)=>{ const ref=doc(fs,COLLECTION,p.split("/")[1]); return { update:(d)=>setDoc(ref,d,{merge:true}), set:(d)=>setDoc(ref,d) }; } };
+  let unsub=null, timer=null;
+  onAuthStateChanged(auth,(u)=>{
+    if(unsub){unsub();unsub=null;} clearTimeout(timer);
+    S.members={}; S.loaded=false; S.readOnly=false; S.pending=null;
+    if(!u){ S.authed=false; S.uid=null; render(); return; }
+    S.authed=true; S.uid=u.uid; S.prefill=u.displayName||""; S.email=u.email||"";
+    render();
+    timer=setTimeout(()=>{ S.offline=true; render(); },10000);
+    unsub=onSnapshot(collection(fs,COLLECTION),snap=>{
+      const m={}; for(const d of snap.docs){ const x=d.data(); if(x) m[d.id]=x; }
+      S.members=m; clearTimeout(timer); S.offline=false; S.loaded=true;
+      const ae=document.activeElement; if(ae && ae.id && (ae.id.startsWith("q-")||ae.id==="join-name"||ae.id==="edit-name"||ae.id==="ruleta-name")) { renderCounts(); return; }
+      render();
+    }, err=>{ clearTimeout(timer); S.loaded=true; render(); toast(err&&err.code==="permission-denied"?"Sin permiso para leer la base de datos. Revisa las reglas de Firestore.":"Se perdió la conexión. Recarga la página."); });
+  });
+}
+function renderCounts(){ const qs=allQuestions(); $("#c-votar").textContent=qs.filter(q=>status(q)==="open").length||""; $("#c-resolver").textContent=qs.filter(q=>status(q)==="closed").length||""; }
+setInterval(()=>{ const ae=document.activeElement; if(S.tab!=="ruleta" && S.loaded && !(ae&&ae.id&&(ae.id.startsWith("q-")||ae.id.startsWith("res-")||ae.id.endsWith("-name")))) render(); }, 60000);
+</script>
+
+</body>
+</html>
