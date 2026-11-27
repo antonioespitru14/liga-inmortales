@@ -635,14 +635,15 @@ function vMovimientos() {
   const lista = movimientos().sort((a, b) => b.desdeJornada - a.desdeJornada || (b.creado || '').localeCompare(a.creado || ''));
   const out = [h('section', { class: 'panel' },
     h('div', { class: 'row between' }, h('h2', {}, 'Movimientos'), h('span', { class: 'sub' }, lista.length + ' registrados')),
-    lista.length ? h('div', { style: 'margin-top:6px' }, lista.map(m => { const p = part(m.equipo);
+    lista.length ? h('button', { id: 'btnHistMov', class: 'ghost', style: 'margin-top:8px', onclick: () => { UI.histMov = !UI.histMov; render(); } }, (UI.histMov ? '▲ Ocultar historial' : '▼ Ver historial de movimientos') + ` (${lista.length})`) : '',
+    !lista.length ? h('div', { class: 'empty' }, 'Aún no hay movimientos.') : !UI.histMov ? '' : h('div', { style: 'margin-top:6px' }, lista.map(m => { const p = part(m.equipo);
       return h('div', { class: 'mov' },
         h('span', { class: 'jbox' }, 'Desde J' + m.desdeJornada),
         h('div', {}, h('div', {}, h('span', { class: 'dot', style: 'background:' + p.color }), h('b', {}, p.nombre), ' · fichaje'),
           h('div', {}, h('span', { class: 'in' }, '↑ ' + jug(m.entra).n), h('span', { class: 'muted' }, ` (${jug(m.entra).p}, ${jug(m.entra).c})`), ' por ', h('span', { class: 'out' }, '↓ ' + jug(m.sale).n), h('span', { class: 'muted' }, ` (${jug(m.sale).p}, ${jug(m.sale).c})`)),
           h('div', { class: 'sub' }, [fmtFecha(m.creado), m.nota, m.autor ? 'anotado por ' + nombreDe(m.autor) : ''].filter(Boolean).join(' · '))),
         S.admin && m._id && S.movsDb.includes(m) ? h('button', { class: 'danger', onclick: e => confirmar(e.currentTarget, () => borrarMovimiento(m)) }, 'Deshacer') : h('span'));
-    })) : h('div', { class: 'empty' }, 'Aún no hay movimientos.'))];
+    })))];
   const libresAhora = Object.keys(JUG).filter(id => !dueñoDe(id, ab)).sort((a, b) => POS_ORDEN.indexOf(jug(a).p) - POS_ORDEN.indexOf(jug(b).p) || jug(a).n.localeCompare(jug(b).n));
   const busca = h('input', { type: 'text', id: 'buscaLibre', placeholder: 'Buscar jugador o club', oninput: e => { const q = norm(e.target.value); document.querySelectorAll('#tablaLibres tbody tr').forEach(tr => tr.hidden = q && !norm(tr.textContent).includes(q)); } });
   out.push(h('section', { class: 'panel' }, h('div', { class: 'row between' }, h('h3', {}, 'Jugadores libres'), h('span', { class: 'sub' }, `${libresAhora.length} en la jornada ${ab}`)),
