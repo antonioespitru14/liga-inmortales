@@ -1,0 +1,14 @@
+name: prueba-ff
+on:
+  push:
+    paths: ['.github/workflows/prueba-ff.yml']
+jobs:
+  prueba:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for u in https://www.futbolfantasy.com/jugadores/lamine-yamal/laliga-26-27 https://www.futbolfantasy.com/laliga/equipos/levante; do
+            curl -s -o /tmp/p.html -w "%{http_code} %{size_download}\n" -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36" "$u"
+            grep -c "tablestats\|plegable\|/jugadores/" /tmp/p.html || true
+            grep -o 'href="https://www.futbolfantasy.com/jugadores/[^"]*"' /tmp/p.html | head -3
+          done
