@@ -50,8 +50,12 @@ def main():
     liga = json.loads((AQUI / 'liga.json').read_text())
     forzar = os.environ.get('FORZAR') == '1'
     ajustes = firestore('liga/ajustes') or {}
-    J = int(os.environ.get('JORNADA') or ajustes.get('jornadaAbierta') or liga['jornadaAbierta'])
     ahora = datetime.datetime.now(MADRID)
+    J = int(ajustes.get('jornadaAbierta') or liga['jornadaAbierta'])
+    # Si ya ha empezado una jornada posterior a la abierta (según el calendario), esa es la que está en juego.
+    empezadas = [m['j'] for m in liga['calendario'] if (fecha_partido(m['f']) or ahora + datetime.timedelta(days=1)) <= ahora]
+    if empezadas: J = max(J, max(empezadas))
+    if os.environ.get('JORNADA'): J = int(os.environ['JORNADA'])
     partidos = [m for m in liga['calendario'] if m['j'] == J]
     inicio = {}
     for m in partidos:

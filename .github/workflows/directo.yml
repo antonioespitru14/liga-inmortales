@@ -31,8 +31,8 @@ jobs:
       - run: pip install -q beautifulsoup4 lxml
       - name: Leer FutbolFantasy
         env:
-          JORNADA: ${{ inputs.jornada || (github.event_name == 'push' && '13' || '') }}
-          FORZAR: ${{ (inputs.forzar || github.event_name == 'push') && '1' || '0' }}
+          JORNADA: ${{ inputs.jornada }}
+          FORZAR: ${{ inputs.forzar && '1' || '0' }}
         run: python robot/directo.py
       - name: Guardar cambios
         run: |

@@ -162,6 +162,15 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
 .card.tocable:hover { outline-color: var(--accent); }
 .chipbtn.fichar { border-style: dashed; }
 @media (max-width: 560px) { .chk { grid-template-columns: auto minmax(0,1fr); } .chk .rol { grid-column: 1 / -1; } }
+.directo { display: grid; gap: 8px; }
+.dteam { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.dteam.abierto { border-color: var(--accent); }
+.dhead { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto auto; gap: 8px; align-items: center; padding: 10px 12px; }
+.dhead .total { font-size: 1.5rem; line-height: 1; min-width: 2.2ch; text-align: right; }
+.dhead:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dteam .desglose { padding: 0 12px 10px !important; }
+.dj.pend { opacity: .6; }
+@media (max-width: 480px) { .dhead { grid-template-columns: auto auto minmax(0,1fr) auto; } .dhead > .sub { display: none; } }
 .rol { display: flex; flex-wrap: wrap; gap: 6px; }
 .chipbtn { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-weight: 500; font-size: .82rem; }
 .chipbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -188,6 +197,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
     <a href="#clasificacion">Clasificación</a>
     <a href="#equipos">Equipos</a>
     <a href="#jornadas">Jornadas</a>
+    <a href="#directo">En directo</a>
     <a href="#partidos">Partidos</a>
     <a href="#movimientos">Movimientos</a>
     <a href="#reglas">Reglas</a>
@@ -924,7 +934,69 @@ async function cargarNombres() {
 }
 
 /* ---------- Router y carga ---------- */
-const VISTAS = { clasificacion: vClasificacion, equipos: vEquipos, jornadas: vJornadas, partidos: vPartidos, movimientos: vMovimientos, reglas: vReglas, datos: vDatos };
+/* ---------- En directo ---------- */
+// directo.json lo escribe cada 15 minutos el robot del repositorio (lee FutbolFantasy durante la jornada).
+const URL_DIRECTO = 'https://raw.githubusercontent.com/antonioespitru14/liga-inmortales/main/directo.json';
+async function cargarDirecto() {
+  if (!window.LIGA_WEB) return;
+  for (const u of [URL_DIRECTO + '?t=' + Date.now(), 'directo.json?t=' + Date.now()]) {
+    try { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) continue; const d = await r.json();
+      if (JSON.stringify(d) !== JSON.stringify(S.directo)) { S.directo = d; if ((location.hash || '').startsWith('#directo')) render(); } return; } catch {}
+  }
+}
+// Puntos de un equipo con los partidos jugados hasta ahora. Un titular cuyo equipo aún no ha jugado queda «pendiente».
+function puntuarDirecto(eid, jor, jugados, definitivo) {
+  const al = alineacionEn(eid, jor.num), stats = statsJornada(jor), usados = new Set(), filas = [];
+  const pj = (jid, st, cap) => forzado(jor, jid) ?? puntosJugador(jid, st, cap);
+  const pendiente = jid => !definitivo && !stats[jid] && !jugados.has(jug(jid).c);
+  for (const tid of al.titulares) {
+    const st = stats[tid];
+    if (st && st.min > 0) { filas.push({ jid: tid, pts: pj(tid, st, tid === al.capitan), st, cap: tid === al.capitan }); continue; }
+    if (pendiente(tid)) { filas.push({ jid: tid, pts: null, cap: tid === al.capitan, pend: true }); continue; }
+    const sup = al.suplentes.find(x => !usados.has(x) && jug(x).p === jug(tid).p && stats[x]?.min > 0);
+    if (sup) { usados.add(sup); filas.push({ jid: sup, pts: pj(sup, stats[sup], false), st: stats[sup], entraPor: tid }); continue; }
+    const espera = al.suplentes.some(x => !usados.has(x) && jug(x).p === jug(tid).p && pendiente(x));
+    filas.push({ jid: tid, pts: espera ? null : 0, nojugo: true, espera });
+  }
+  return { al, filas, total: r1(filas.reduce((t, f) => t + (f.pts || 0), 0)), jugados: filas.filter(f => f.pts != null).length };
+}
+function vDirecto() {
+  const ab = jornadaAbierta(), dir = S.directo;
+  const J = UI.jornadaDir || (dir?.jornada >= ab ? dir.jornada : ab);
+  const oficial = D.jornadas.find(j => j.num === J && j.stats);
+  const jor = oficial || { num: J, stats: dir?.jornada === J ? dir.stats || {} : {} };
+  const jugados = new Set(Object.keys(jor.stats).map(id => jug(id).c));
+  const filas = participantes().map(p => ({ p, r: puntuarDirecto(p.id, jor, jugados, !!oficial) })).sort((a, b) => b.r.total - a.r.total);
+  const valores = [...new Set(filas.map(f => f.r.total))].sort((a, b) => b - a);
+  const mio = miEquipo(); if (UI.dirAbierto === undefined) UI.dirAbierto = mio || null;
+  const opciones = [...new Set([...D.jornadas.filter(j => j.stats).map(j => j.num), ab, ...(dir ? [dir.jornada] : [])])].sort((a, b) => a - b);
+  const selJ = h('select', { id: 'selJornadaDir', onchange: e => { UI.jornadaDir = Number(e.target.value); render(); } }, opciones.map(n => h('option', { value: n, selected: n === J }, 'Jornada ' + n)));
+  const partidosJ = (D.calendario || []).filter(m => m.j === J);
+  const nJugados = partidosJ.filter(m => jugados.has(m.l) || jugados.has(m.v)).length;
+  const estado = oficial ? 'Puntos definitivos de la jornada.' : dir?.jornada === J ? `Última actualización: ${new Date(dir.actualizado).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Se actualiza solo cada 15 minutos mientras hay partidos.` : 'Aún no hay datos de esta jornada: aparecerán en cuanto termine el primer partido.';
+  const detalle = f => {
+    const d = f.st && forzado(jor, f.jid) == null ? desgloseJugador(f.jid, f.st, f.cap) : [];
+    const txt = f.pend ? 'Aún no ha jugado su equipo' : f.espera ? 'No jugó · puede entrar un suplente que aún no ha jugado' : f.nojugo ? 'No jugó' : f.st ? [`${f.st.min}'`, ...d.map(x => `${x.txt} ${x.pts > 0 ? '+' : ''}${x.pts}`)].join(' · ') : '';
+    return h('div', { class: 'dj' + (f.pend ? ' pend' : '') }, h('span', { class: 'pchip' }, jug(f.jid).p),
+      h('div', { style: 'min-width:0' }, h('div', { class: 'nm' }, jug(f.jid).n + (f.cap ? ' (C)' : '')), h('div', { class: 'sub' }, jug(f.jid).c + (f.entraPor ? ' · entra por ' + jug(f.entraPor).n : '') + (txt ? ' · ' + txt : ''))),
+      h('div', { class: 'pt' }, f.pts == null ? '…' : f.pts));
+  };
+  return [h('section', { class: 'panel' },
+    h('div', { class: 'row between' }, h('h2', {}, 'En directo'), h('label', { class: 'f' }, 'Jornada', selJ)),
+    h('p', { class: 'sub', style: 'margin:4px 0 4px' }, `${nJugados} de ${partidosJ.length || 10} partidos con datos. ${estado}`),
+    h('p', { class: 'sub', style: 'margin:0 0 10px' }, 'Puntos provisionales con las reglas de la liga (capitán incluido, sin los puntos extra del podio, que se suman al cerrar la jornada). Toca un equipo para ver su once.'),
+    h('div', { class: 'directo' }, filas.map(({ p, r }) => {
+      const abierto = UI.dirAbierto === p.id, pos = valores.indexOf(r.total) + 1;
+      return h('div', { class: 'dteam' + (abierto ? ' abierto' : '') },
+        h('button', { type: 'button', class: 'dhead', 'aria-expanded': abierto ? 'true' : 'false', onclick: () => { UI.dirAbierto = abierto ? null : p.id; render(); } },
+          h('span', { class: 'pos' }, pos), h('span', { class: 'dot', style: 'background:' + p.color }), h('b', {}, p.nombre + (p.id === mio ? ' (tú)' : '')),
+          h('span', { class: 'sub' }, `${r.jugados}/11 con puntos`), h('span', { class: 'total' }, r.total)),
+        abierto ? h('div', { class: 'desglose', style: 'padding:4px 0 8px' }, r.filas.map(detalle),
+          r.al.suplentes.length ? h('div', { class: 'sub', style: 'margin-top:6px' }, 'Suplentes: ' + r.al.suplentes.map(x => jug(x).n + (jor.stats[x] ? ` (${jor.stats[x].min ? puntosJugador(x, statsJornada(jor)[x]) + ' pts' : 'no jugó'})` : '')).join(', ')) : '') : '');
+    })))];
+}
+
+const VISTAS = { clasificacion: vClasificacion, equipos: vEquipos, jornadas: vJornadas, directo: vDirecto, partidos: vPartidos, movimientos: vMovimientos, reglas: vReglas, datos: vDatos };
 function render() {
   const nombre = VISTAS[location.hash.slice(1)] ? location.hash.slice(1) : 'clasificacion';
   document.querySelectorAll('nav.tabs a').forEach(a => { if (a.getAttribute('href') === '#' + nombre) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -967,6 +1039,8 @@ async function iniciar() {
   db.collection('correcciones').onSnapshot(q => { S.correcciones = Object.fromEntries(q.docs.map(d => [d.id, d.data()])); aplicarPosiciones(); render(); cargarNombres(); }, fallo);
   db.collection('alineaciones').onSnapshot(q => { S.alineaciones = q.docs.map(d => ({ ...d.data(), _id: d.id })); listo.al = true; fin(); }, fallo);
 }
+cargarDirecto(); setInterval(() => { if (!document.hidden) cargarDirecto(); }, 120000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) cargarDirecto(); });
 iniciar();
 </script>
 </body>
