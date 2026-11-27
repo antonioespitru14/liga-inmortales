@@ -521,10 +521,19 @@ function vPartidos() {
       : h('div', { class: 'empty' }, 'No hay partidos cargados para esta jornada.'))];
 }
 
+// Quita del borrador a los jugadores que ya no están en la plantilla (p. ej. tras un fichaje hecho con el editor abierto);
+// si el fichaje los cambió por otro, pone al nuevo en su sitio.
+function limpiarBorrador(B, eid, j) {
+  const pl = plantillaEn(eid, j), usados = new Set([...B.titulares, ...B.suplentes]);
+  const fix = x => { if (pl.includes(x)) return x; let y = x; for (let i = 0; i < 20 && !pl.includes(y); i++) { const n = movidoA(eid, y, j); if (n === y) break; y = n; } return pl.includes(y) && !usados.has(y) ? (usados.add(y), y) : null; };
+  B.titulares = B.titulares.map(fix).filter(Boolean); B.suplentes = B.suplentes.map(fix).filter(Boolean);
+  if (B.capitan && !pl.includes(B.capitan)) B.capitan = null;
+}
 function editorAlineacion(eid, ab, comoMod = false) {
   const pl = plantillaEn(eid, ab);
   if (!UI.borrador || UI.borrador.eid !== eid || UI.borrador.j !== ab) { const a = alineacionEn(eid, ab); UI.borrador = { eid, j: ab, titulares: [...a.titulares], suplentes: [...a.suplentes], capitan: a.capitan || null }; }
-  const B = UI.borrador, c = contar(B.titulares);
+  const B = UI.borrador; limpiarBorrador(B, eid, ab);
+  const c = contar(B.titulares);
   B.formacion = formacionDe(B.titulares);
   if (B.capitan && !B.titulares.includes(B.capitan)) B.capitan = null;
   const okPos = p => (c[p] || 0) >= LIMITES[p][0] && (c[p] || 0) <= LIMITES[p][1];
@@ -815,12 +824,13 @@ function reclamar(eid) {
   guardar(() => S.db.doc('alineaciones/' + S.yo).set({ ...(d || {}), equipo: eid, reclamado: new Date().toISOString(), historial: d?.historial || {} }), 'Ya gestionas ' + part(eid).nombre);
 }
 async function guardarAlineacion(eid, ab) {
-  const B = UI.borrador, d = miDoc();
+  const B = UI.borrador, d = miDoc(); limpiarBorrador(B, eid, ab);
   const historial = { ...(d?.historial || {}), [ab]: { formacion: B.formacion, titulares: B.titulares, suplentes: B.suplentes, capitan: B.capitan || null, equipo: eid, guardado: new Date().toISOString() } };
   if (await guardar(() => S.db.doc('alineaciones/' + S.yo).update({ historial }), 'Alineación guardada para la jornada ' + ab)) UI.borrador = null;
 }
 // El administrador o un moderador cambia la alineación de cualquier equipo: correcciones/alineaciones.equipos[eid][jornada].
 async function guardarAlineacionMod(eid, j) {
+  limpiarBorrador(UI.borrador, eid, j);
   const B = UI.borrador, actual = S.correcciones.alineaciones?.equipos || {};
   const equipos = { ...actual, [eid]: { ...(actual[eid] || {}), [j]: { formacion: B.formacion, titulares: B.titulares, suplentes: B.suplentes, capitan: B.capitan || null, equipo: eid, guardado: new Date().toISOString(), autor: S.yo, fuente: 'moderador' } } };
   if (await guardar(() => S.db.doc('correcciones/alineaciones').set({ equipos }), `Alineación de ${part(eid).nombre} guardada para la jornada ${j}`)) { UI.borrador = null; UI.editMod = null; render(); }
@@ -828,7 +838,6 @@ async function guardarAlineacionMod(eid, j) {
 // Cambio rápido de capitán por el administrador o un moderador: guarda la alineación actual con el nuevo capitán.
 async function cambiarCapitanMod(eid, j, cap) {
   const a = alineacionEn(eid, j);
-  UI.borrador = { eid, j, titulares: [...a.titulares], suplentes: [...a.suplentes], capitan: cap, formacion: a.formacion };
   const actual = S.correcciones.alineaciones?.equipos || {};
   const equipos = { ...actual, [eid]: { ...(actual[eid] || {}), [j]: { formacion: a.formacion, titulares: a.titulares, suplentes: a.suplentes, capitan: cap, equipo: eid, guardado: new Date().toISOString(), autor: S.yo, fuente: 'moderador' } } };
   UI.borrador = null;
