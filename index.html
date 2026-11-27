@@ -470,8 +470,11 @@ function vEquipos() {
         }))) : '')));
   }
   if (plantillaEn(eid, ab).length) bloques.push(seguimientoEquipo(eid, ab));
-  if (!puedoEditar && S.db && esModerador() && plantillaEn(eid, UI.jornadaEq).length) bloques.push(h('div', { class: 'panel admin', style: 'margin-top:16px' }, h('h3', {}, 'Cambiar esta alineación'),
-    h('p', { class: 'sub', style: 'margin:4px 0 8px' }, `Como ${S.admin ? 'administrador' : 'moderador'} puedes cambiar la alineación de ${p.nombre} en la jornada ${UI.jornadaEq}${UI.jornadaEq < ab ? ' (ya cerrada: sus puntos se recalculan)' : ''}. Cuenta para esa jornada y las siguientes hasta que alguien la cambie, y queda firmado con tu nombre.`),
+  if (!puedoEditar && S.db && esModerador() && plantillaEn(eid, UI.jornadaEq).length) bloques.push(h('div', { class: 'panel admin', style: 'margin-top:16px' }, h('h3', {}, 'Cambiar capitán o alineación'),
+    h('p', { class: 'sub', style: 'margin:4px 0 8px' }, `Como ${S.admin ? 'administrador' : 'moderador'} puedes cambiar el capitán o la alineación de ${p.nombre} en la jornada ${UI.jornadaEq}${UI.jornadaEq < ab ? ' (ya cerrada: sus puntos se recalculan)' : ''}. Cuenta para esa jornada y las siguientes hasta que alguien la cambie, y queda firmado con tu nombre.`),
+    (() => { const a = alineacionEn(eid, UI.jornadaEq); return a.titulares.length ? h('div', { class: 'row', style: 'margin-bottom:10px;flex-wrap:wrap;gap:8px;align-items:center' },
+      h('label', { class: 'f' }, 'Capitán de ' + p.nombre + ' (jornada ' + UI.jornadaEq + ')',
+        h('select', { id: 'selCapMod', onchange: e => cambiarCapitanMod(eid, UI.jornadaEq, e.target.value || null) }, h('option', { value: '' }, 'Sin capitán'), a.titulares.map(x => h('option', { value: x, selected: x === a.capitan }, jug(x).n))))) : ''; })(),
     h('button', { onclick: () => { UI.editMod = eid + '|' + UI.jornadaEq; UI.borrador = null; render(); } }, 'Cambiar alineación de ' + p.nombre)));
   if (S.admin) bloques.push(panelAdminEquipo(eid, mbs));
   return [h('section', { class: 'panel' }, bloques)];
@@ -820,6 +823,15 @@ async function guardarAlineacionMod(eid, j) {
   const B = UI.borrador, actual = S.correcciones.alineaciones?.equipos || {};
   const equipos = { ...actual, [eid]: { ...(actual[eid] || {}), [j]: { formacion: B.formacion, titulares: B.titulares, suplentes: B.suplentes, capitan: B.capitan || null, equipo: eid, guardado: new Date().toISOString(), autor: S.yo, fuente: 'moderador' } } };
   if (await guardar(() => S.db.doc('correcciones/alineaciones').set({ equipos }), `Alineación de ${part(eid).nombre} guardada para la jornada ${j}`)) { UI.borrador = null; UI.editMod = null; render(); }
+}
+// Cambio rápido de capitán por el administrador o un moderador: guarda la alineación actual con el nuevo capitán.
+async function cambiarCapitanMod(eid, j, cap) {
+  const a = alineacionEn(eid, j);
+  UI.borrador = { eid, j, titulares: [...a.titulares], suplentes: [...a.suplentes], capitan: cap, formacion: a.formacion };
+  const actual = S.correcciones.alineaciones?.equipos || {};
+  const equipos = { ...actual, [eid]: { ...(actual[eid] || {}), [j]: { formacion: a.formacion, titulares: a.titulares, suplentes: a.suplentes, capitan: cap, equipo: eid, guardado: new Date().toISOString(), autor: S.yo, fuente: 'moderador' } } };
+  UI.borrador = null;
+  if (await guardar(() => S.db.doc('correcciones/alineaciones').set({ equipos }), cap ? `Capitán de ${part(eid).nombre} en la jornada ${j}: ${jug(cap).n}` : `${part(eid).nombre} se queda sin capitán en la jornada ${j}`)) render();
 }
 // Quitar a alguien no borra sus alineaciones pasadas: siguen contando para las jornadas en que las guardó.
 function liberar(uid) {
