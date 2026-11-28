@@ -1,7 +1,5 @@
-name: Puntos en directo
+name: Puntos en directo (a mano)
 on:
-  schedule:
-    - cron: '4,19,34,49 * * * *'
   workflow_dispatch:
     inputs:
       jornada:
@@ -13,7 +11,7 @@ on:
         default: true
   push:
     branches: [main]
-    paths: ['robot/*.py', '.github/workflows/directo.yml']
+    paths: ['robot/pedir.txt']
 permissions:
   contents: write
 concurrency:
@@ -32,7 +30,7 @@ jobs:
       - name: Leer FutbolFantasy
         env:
           JORNADA: ${{ inputs.jornada }}
-          FORZAR: ${{ inputs.forzar && '1' || '0' }}
+          FORZAR: ${{ (inputs.forzar || github.event_name == 'push') && '1' || '0' }}
         run: python robot/directo.py
       - name: Guardar cambios
         run: |
