@@ -1,12 +1,16 @@
-name: Puntos en directo (a mano)
+name: Puntos en directo
+# Cada hora (GitHub no garantiza más frecuencia) se lanza una tanda que lee FutbolFantasy cada 15 minutos
+# durante unos 55 minutos, solo si hay partidos de la jornada empezados en las últimas 40 horas.
 on:
+  schedule:
+    - cron: '2 * * * *'
   workflow_dispatch:
     inputs:
       jornada:
-        description: 'Jornada (vacío = la abierta)'
+        description: 'Jornada (vacío = la que está en juego)'
         required: false
       forzar:
-        description: 'Leer todos los jugadores aunque no haya partidos recientes'
+        description: 'Leer aunque no haya partidos recientes'
         type: boolean
         default: true
   push:
@@ -20,21 +24,30 @@ concurrency:
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install -q beautifulsoup4 lxml
-      - name: Leer FutbolFantasy
+      - name: Leer FutbolFantasy y guardar
         env:
           JORNADA: ${{ inputs.jornada }}
           FORZAR: ${{ (inputs.forzar || github.event_name == 'push') && '1' || '0' }}
-        run: python robot/directo.py
-      - name: Guardar cambios
+          VUELTAS: ${{ github.event_name == 'schedule' && '4' || '1' }}
         run: |
-          for f in directo.json robot/slugs.json; do [ -f "$f" ] && git add "$f"; done; true
-          if git diff --cached --quiet; then echo "Sin cambios"; exit 0; fi
-          git -c user.name="Robot de la liga" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Puntos en directo"
-          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((i*5)); done; exit 1
+          git config user.name "Robot de la liga"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in $(seq 1 "$VUELTAS"); do
+            git pull -q --rebase || true
+            set +e; python robot/directo.py; rc=$?; set -e
+            if [ "$rc" = 3 ]; then exit 0; fi
+            for f in directo.json robot/slugs.json; do [ -f "$f" ] && git add "$f"; done
+            if ! git diff --cached --quiet; then
+              git commit -qm "Puntos en directo"
+              for k in 1 2 3 4; do git pull -q --rebase && git push -q && break; sleep $((k*5)); done
+            fi
+            [ "$i" -lt "$VUELTAS" ] && sleep 840
+          done
+          true

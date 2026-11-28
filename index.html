@@ -935,7 +935,7 @@ async function cargarNombres() {
 
 /* ---------- Router y carga ---------- */
 /* ---------- En directo ---------- */
-// directo.json lo escribe a petición el flujo «Puntos en directo (a mano)» del repositorio (lee FutbolFantasy).
+// directo.json lo escribe el robot «Puntos en directo» del repositorio (lee FutbolFantasy cada 15 min durante la jornada).
 const URL_DIRECTO = 'https://raw.githubusercontent.com/antonioespitru14/liga-inmortales/main/directo.json';
 async function cargarDirecto() {
   if (!window.LIGA_WEB) return;
@@ -981,7 +981,7 @@ function vDirecto() {
   const selJ = h('select', { id: 'selJornadaDir', onchange: e => { UI.jornadaDir = Number(e.target.value); render(); } }, opciones.map(n => h('option', { value: n, selected: n === J }, 'Jornada ' + n)));
   const partidosJ = (D.calendario || []).filter(m => m.j === J);
   const nJugados = partidosJ.filter(m => jugados.has(m.l) && jugados.has(m.v)).length;
-  const estado = oficial ? 'Puntos definitivos de la jornada.' : dir?.jornada === J ? `Última actualización: ${new Date(dir.actualizado).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Los puntos se actualizan a mano después de los partidos.` : 'Aún no hay datos de esta jornada: aparecerán en cuanto termine el primer partido.';
+  const estado = oficial ? 'Puntos definitivos de la jornada.' : dir?.jornada === J ? `Última actualización: ${new Date(dir.actualizado).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Se actualiza solo cada 15 minutos mientras hay partidos (los datos de FutbolFantasy pueden tardar un rato tras cada partido).` : 'Aún no hay datos de esta jornada: aparecerán en cuanto termine el primer partido.';
   const detalle = f => {
     const d = f.st && forzado(jor, f.jid) == null ? desgloseJugador(f.jid, f.st, f.cap) : [];
     const txt = f.pend ? 'Aún no ha jugado su equipo' : f.espera ? 'No jugó · puede entrar un suplente que aún no ha jugado' : f.nojugo ? 'No jugó' : f.st ? [`${f.st.min}'`, ...d.map(x => `${x.txt} ${x.pts > 0 ? '+' : ''}${x.pts}`)].join(' · ') : '';

@@ -63,7 +63,7 @@ def main():
         for c in (m['l'], m['v']): inicio[c] = fp
     # Sin partidos de la jornada empezados en las últimas 40 horas, no hay nada nuevo que leer.
     if not forzar and partidos and not any(fp and ahora - datetime.timedelta(hours=40) <= fp <= ahora for fp in inicio.values()):
-        print(f'Jornada {J}: ningún partido reciente. Nada que hacer.'); return
+        print(f'Jornada {J}: ningún partido reciente. Nada que hacer.'); sys.exit(3)
     # Jugadores de los equipos en la jornada J (plantillas + fichajes guardados en la web).
     movs = firestore('movimientos?pageSize=300') or []
     movs = liga['movimientos'] + movs
