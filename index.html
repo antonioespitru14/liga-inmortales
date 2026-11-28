@@ -935,7 +935,7 @@ async function cargarNombres() {
 
 /* ---------- Router y carga ---------- */
 /* ---------- En directo ---------- */
-// directo.json lo escribe cada 15 minutos el robot del repositorio (lee FutbolFantasy durante la jornada).
+// directo.json lo escribe a petición el flujo «Puntos en directo (a mano)» del repositorio (lee FutbolFantasy).
 const URL_DIRECTO = 'https://raw.githubusercontent.com/antonioespitru14/liga-inmortales/main/directo.json';
 async function cargarDirecto() {
   if (!window.LIGA_WEB) return;
@@ -960,20 +960,28 @@ function puntuarDirecto(eid, jor, jugados, definitivo) {
   }
   return { al, filas, total: r1(filas.reduce((t, f) => t + (f.pts || 0), 0)), jugados: filas.filter(f => f.pts != null).length };
 }
+// «Sab 28/11 21:00» (hora de España) -> milisegundos. Temporada 2026-27: de julio a diciembre es 2026.
+function fechaPartido(f) {
+  const m = /(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/.exec(f || ''); if (!m) return null;
+  const [d, mes, hh, mi] = m.slice(1).map(Number), y = mes >= 7 ? 2026 : 2027;
+  return Date.UTC(y, mes - 1, d, hh, mi) - (mes >= 4 && mes <= 10 ? 2 : 1) * 3600e3;
+}
 function vDirecto() {
   const ab = jornadaAbierta(), dir = S.directo;
   const J = UI.jornadaDir || (dir?.jornada >= ab ? dir.jornada : ab);
   const oficial = D.jornadas.find(j => j.num === J && j.stats);
   const jor = oficial || { num: J, stats: dir?.jornada === J ? dir.stats || {} : {} };
   const jugados = new Set(Object.keys(jor.stats).map(id => jug(id).c));
+  // También cuentan como jugados los partidos del calendario que empezaron hace más de 2 horas.
+  for (const m of (D.calendario || []).filter(m => m.j === J)) { const t = fechaPartido(m.f); if (m.r || (t && Date.now() - t > 2 * 3600e3)) { jugados.add(m.l); jugados.add(m.v); } }
   const filas = participantes().map(p => ({ p, r: puntuarDirecto(p.id, jor, jugados, !!oficial) })).sort((a, b) => b.r.total - a.r.total);
   const valores = [...new Set(filas.map(f => f.r.total))].sort((a, b) => b - a);
   const mio = miEquipo(); if (UI.dirAbierto === undefined) UI.dirAbierto = mio || null;
   const opciones = [...new Set([...D.jornadas.filter(j => j.stats).map(j => j.num), ab, ...(dir ? [dir.jornada] : [])])].sort((a, b) => a - b);
   const selJ = h('select', { id: 'selJornadaDir', onchange: e => { UI.jornadaDir = Number(e.target.value); render(); } }, opciones.map(n => h('option', { value: n, selected: n === J }, 'Jornada ' + n)));
   const partidosJ = (D.calendario || []).filter(m => m.j === J);
-  const nJugados = partidosJ.filter(m => jugados.has(m.l) || jugados.has(m.v)).length;
-  const estado = oficial ? 'Puntos definitivos de la jornada.' : dir?.jornada === J ? `Última actualización: ${new Date(dir.actualizado).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Se actualiza solo cada 15 minutos mientras hay partidos.` : 'Aún no hay datos de esta jornada: aparecerán en cuanto termine el primer partido.';
+  const nJugados = partidosJ.filter(m => jugados.has(m.l) && jugados.has(m.v)).length;
+  const estado = oficial ? 'Puntos definitivos de la jornada.' : dir?.jornada === J ? `Última actualización: ${new Date(dir.actualizado).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Los puntos se actualizan a mano después de los partidos.` : 'Aún no hay datos de esta jornada: aparecerán en cuanto termine el primer partido.';
   const detalle = f => {
     const d = f.st && forzado(jor, f.jid) == null ? desgloseJugador(f.jid, f.st, f.cap) : [];
     const txt = f.pend ? 'Aún no ha jugado su equipo' : f.espera ? 'No jugó · puede entrar un suplente que aún no ha jugado' : f.nojugo ? 'No jugó' : f.st ? [`${f.st.min}'`, ...d.map(x => `${x.txt} ${x.pts > 0 ? '+' : ''}${x.pts}`)].join(' · ') : '';
@@ -983,7 +991,7 @@ function vDirecto() {
   };
   return [h('section', { class: 'panel' },
     h('div', { class: 'row between' }, h('h2', {}, 'En directo'), h('label', { class: 'f' }, 'Jornada', selJ)),
-    h('p', { class: 'sub', style: 'margin:4px 0 4px' }, `${nJugados} de ${partidosJ.length || 10} partidos con datos. ${estado}`),
+    h('p', { class: 'sub', style: 'margin:4px 0 4px' }, `${nJugados} de ${partidosJ.length || 10} partidos jugados. ${estado}`),
     h('p', { class: 'sub', style: 'margin:0 0 10px' }, 'Puntos provisionales con las reglas de la liga (capitán incluido, sin los puntos extra del podio, que se suman al cerrar la jornada). Toca un equipo para ver su once.'),
     h('div', { class: 'directo' }, filas.map(({ p, r }) => {
       const abierto = UI.dirAbierto === p.id, pos = valores.indexOf(r.total) + 1;

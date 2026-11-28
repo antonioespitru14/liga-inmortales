@@ -87,7 +87,7 @@ def main():
         if not j: continue
         nombre, club = j
         fp = inicio.get(club)
-        if not forzar and fp and fp > ahora: continue          # su partido aún no ha empezado
+        if fp and fp > ahora: stats.pop(jid, None); continue   # su partido aún no ha empezado: no hay datos válidos
         slug = slugs.get(jid) or jid.split('.')[0]
         html = get(f'{FF}/jugadores/{slug}/laliga-26-27')
         if html is None or 'tablestats' not in html:
